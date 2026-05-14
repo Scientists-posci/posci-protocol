@@ -1,0 +1,196 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Frosted-black system. Tesla/Starlink-inspired:
+    - Background: warm-tinted near-black (NOT flat #000), so layered glass picks up temperature
+    - Cards: backdrop-blur frosted panels with subtle inner edge highlights
+    - Hero: layered atmospheric gradients + a CSS-only glowing core orb as visual anchor
+    - Type: very light weights, generous letter-spacing
+    - Motion: slow drift only, no bounce
+*/
+
+@layer base {
+  :root {
+    /* Warm near-black base — adds slight neutrality + tone, breaks flatness */
+    --background:            220 10% 3%;
+    --foreground:            0   0%  100%;
+
+    --card:                  220 12% 7%;
+    --card-foreground:       0   0%  100%;
+    --popover:               220 12% 6%;
+    --popover-foreground:    0   0%  100%;
+
+    /* White-on-white CTA primary, signature minimalist tech-CTA */
+    --primary:               0   0%  100%;
+    --primary-foreground:    220 10% 3%;
+
+    /* Single-accent: soft cool cyan, used only for status pings */
+    --accent:                190 80% 70%;
+    --accent-foreground:     220 10% 3%;
+
+    --secondary:             220 12% 10%;
+    --secondary-foreground:  0   0%  100%;
+    --muted:                 220 12% 9%;
+    --muted-foreground:      220 8%  65%;
+
+    --destructive:           0   75% 60%;
+    --destructive-foreground:0   0%  100%;
+
+    --border:                220 12% 14%;
+    --input:                 220 12% 18%;
+    --ring:                  220 10% 60%;
+    --radius:                0.5rem;
+  }
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { font-feature-settings: 'cv11', 'ss01', 'ss03', 'ss04'; }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    /* Layered atmosphere: warm orange spark top-left, cool cyan top-right,
+       deep void bottom. None of them are bright — they're tone shifts only. */
+    background-image:
+      radial-gradient(70% 50% at 18% 0%,  rgba(255, 200, 160, 0.075), transparent 60%),
+      radial-gradient(60% 50% at 82% 0%,  rgba(150, 200, 255, 0.085), transparent 60%),
+      radial-gradient(80% 60% at 50% 100%, rgba(140, 160, 255, 0.045), transparent 70%);
+    background-attachment: fixed;
+    font-weight: 400;
+    letter-spacing: -0.011em;
+  }
+
+  ::selection { background: hsl(var(--foreground) / 0.85); color: hsl(var(--background)); }
+
+  /* Editorial classes */
+  .display {
+    font-weight: 200;
+    letter-spacing: -0.038em;
+    line-height: 0.92;
+  }
+  .eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.34em;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+}
+
+/* ============== Frosted glass primitives ============== */
+
+/* The signature "frosted black" surface. Use on every card. */
+.glass {
+  background-color: hsl(220 12% 8% / 0.55);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid hsl(0 0% 100% / 0.06);
+  /* Inner top-edge highlight — gives the "thickness" feel of glass */
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.07),
+    0 30px 60px -30px rgba(0, 0, 0, 0.6);
+}
+
+.glass-strong {
+  background-color: hsl(220 12% 7% / 0.7);
+  backdrop-filter: blur(28px) saturate(160%);
+  -webkit-backdrop-filter: blur(28px) saturate(160%);
+  border: 1px solid hsl(0 0% 100% / 0.08);
+  box-shadow:
+    inset 0 1px 0 0 hsl(0 0% 100% / 0.10),
+    0 40px 80px -30px rgba(0, 0, 0, 0.65);
+}
+
+/* Subtle pulsing dot for live status indicators */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: hsl(var(--accent));
+  box-shadow: 0 0 8px hsl(var(--accent) / 0.6);
+}
+.live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: hsl(var(--accent));
+  animation: live-ring 2s ease-out infinite;
+}
+@keyframes live-ring {
+  0%   { transform: scale(1);   opacity: 0.55; }
+  80%  { transform: scale(2.6); opacity: 0;    }
+  100% { transform: scale(2.6); opacity: 0;    }
+}
+
+/* Hairline grid utility — used on background as technical underlay */
+.hairlines {
+  background-image:
+    linear-gradient(to right,  rgba(255,255,255,0.030) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255,255,255,0.030) 1px, transparent 1px);
+  background-size: 96px 96px;
+}
+
+/* Film grain — breaks gradient banding, gives photographic feel */
+.grain {
+  position: relative;
+}
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 220 220' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='1.0' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* Slow drift animations for atmospheric elements */
+@keyframes drift-slow {
+  0%   { transform: translate3d(0,0,0) scale(1); }
+  50%  { transform: translate3d(20px,-10px,0) scale(1.05); }
+  100% { transform: translate3d(0,0,0) scale(1); }
+}
+.drift { animation: drift-slow 18s ease-in-out infinite; }
+
+@keyframes spin-slow {
+  to { transform: rotate(360deg); }
+}
+.spin-slow { animation: spin-slow 60s linear infinite; }
+
+/* Hero entrance — pure CSS so it's safe across SSR/headless screenshots */
+@keyframes heroIn {
+  from { opacity: 0; transform: translate3d(0, 16px, 0); }
+  to   { opacity: 1; transform: translate3d(0, 0,    0); }
+}
+
+@keyframes scrollHint {
+  0%, 100% { transform: translateX(-50%) translateY(0);  }
+  50%      { transform: translateX(-50%) translateY(8px); }
+}
+
+/* Shimmer for loading placeholders */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--muted-foreground) / 0.18) 50%,
+    hsl(var(--muted)) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+
+.tabular { font-variant-numeric: tabular-nums; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: hsl(var(--background)); }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground)); }

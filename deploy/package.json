@@ -1,0 +1,14 @@
+{
+  "name": "posci-deploy",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "deploy": "node deploy.mjs",
+    "preflight": "node deploy.mjs --preflight-only",
+    "post-deploy": "node deploy.mjs --post-deploy-only"
+  },
+  "dependencies": {
+    "viem": "^2.21.55"
+  }
+}

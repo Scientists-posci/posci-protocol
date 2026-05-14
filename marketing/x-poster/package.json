@@ -1,0 +1,16 @@
+{
+  "name": "posci-x-poster",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "post:thread:en":  "node post.mjs --thread english",
+    "post:thread:zh":  "node post.mjs --thread chinese",
+    "post:pinned:en":  "node post.mjs --pinned english",
+    "post:pinned:zh":  "node post.mjs --pinned chinese",
+    "dry":             "node post.mjs --dry-run --thread english"
+  },
+  "dependencies": {
+    "twitter-api-v2": "^1.18.2"
+  }
+}

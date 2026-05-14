@@ -1,0 +1,10 @@
+.env
+.env.local
+out/
+cache/
+broadcast/
+lib/
+node_modules/
+.vercel/
+*.log
+.DS_Store

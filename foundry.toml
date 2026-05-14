@@ -1,0 +1,30 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.26"
+optimizer = true
+optimizer_runs = 1000
+via_ir = true
+evm_version = "cancun"
+# Brute-force nonce search in _findNonce can chew ~200M gas; bump from the
+# fork-mode default (~1B with i32-capped block gas) so mining tests pass under
+# `forge test --fork-url`.
+gas_limit = "18446744073709551615"
+
+# Allow forge to read .env
+ffi = false
+fs_permissions = [{ access = "read", path = "./" }]
+
+[fmt]
+line_length = 110
+tab_width = 4
+bracket_spacing = false
+
+[rpc_endpoints]
+mainnet = "${MAINNET_RPC_URL}"
+sepolia = "${SEPOLIA_RPC_URL}"
+
+[etherscan]
+mainnet = { key = "${ETHERSCAN_API_KEY}" }
+sepolia = { key = "${ETHERSCAN_API_KEY}" }
