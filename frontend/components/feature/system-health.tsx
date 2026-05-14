@@ -1,7 +1,7 @@
 'use client';
 
 import { useReadContracts } from 'wagmi';
-import { ShieldCheck, ShieldAlert, Lock, Pickaxe, Rocket, Atom, Skull, ExternalLink, Check, Loader2 } from 'lucide-react';
+import { ShieldCheck, ShieldAlert, Lock, Pickaxe, Rocket, Atom, Skull, ExternalLink, Check, Loader2, Flame } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -10,6 +10,8 @@ import { usePoolState } from '@/lib/hooks';
 import { shortAddr } from '@/lib/utils';
 
 const NOT_DEPLOYED = '0x0000000000000000000000000000000000000000';
+const DEAD_ADDRESS = '0x000000000000000000000000000000000000dEaD' as const;
+const MINING_EMISSION_CAP = 20_000_000n * 10n ** 18n;
 
 export function SystemHealth() {
   const ready = TOKEN_ADDRESS !== NOT_DEPLOYED && MINING_ADDRESS !== NOT_DEPLOYED && GENESIS_ADDRESS !== NOT_DEPLOYED;
@@ -22,6 +24,9 @@ export function SystemHealth() {
       { address: MINING_ADDRESS,  abi: MINING_ABI,  functionName: 'poolGateOpen' },
       { address: MINING_ADDRESS,  abi: MINING_ABI,  functionName: 'miningStartTime' },
       { address: GENESIS_ADDRESS, abi: GENESIS_ABI, functionName: 'bootstrapped' },
+      { address: TOKEN_ADDRESS,   abi: TOKEN_ABI,   functionName: 'balanceOf', args: [DEAD_ADDRESS] },
+      { address: TOKEN_ADDRESS,   abi: TOKEN_ABI,   functionName: 'balanceOf', args: [MINING_ADDRESS] },
+      { address: MINING_ADDRESS,  abi: MINING_ABI,  functionName: 'tokensMinted' },
     ],
     query: { refetchInterval: 30_000, enabled: ready },
   });
@@ -34,6 +39,21 @@ export function SystemHealth() {
   const poolGateOpen     = (chain?.[3]?.result as boolean | undefined) ?? false;
   const miningStart      = (chain?.[4]?.result as bigint | undefined) ?? 0n;
   const bootstrapped     = (chain?.[5]?.result as boolean | undefined) ?? false;
+  const deadBalance      = (chain?.[6]?.result as bigint | undefined) ?? 0n;
+  const miningBalance    = (chain?.[7]?.result as bigint | undefined) ?? 0n;
+  const tokensMinted     = (chain?.[8]?.result as bigint | undefined) ?? 0n;
+
+  // POSCI that can never circulate:
+  //  (a) explicit burns to 0xdEaD (e.g., Genesis forceBootstrap leftover)
+  //  (b) the unreachable buffer in mining contract = balance - (cap - emitted so far)
+  //      (cap = 20M; deploy sends 20.5M; the 500K excess is past the emission ceiling)
+  const miningEmissionRemaining = MINING_EMISSION_CAP > tokensMinted
+    ? MINING_EMISSION_CAP - tokensMinted
+    : 0n;
+  const miningStranded = miningBalance > miningEmissionRemaining
+    ? miningBalance - miningEmissionRemaining
+    : 0n;
+  const totalBurned = deadBalance + miningStranded;
 
   const checks = [
     {
@@ -78,6 +98,12 @@ export function SystemHealth() {
         ? `${(Number(pool.ethReserve) / 1e18).toFixed(4)} ETH reserve`
         : 'awaiting bootstrap',
     },
+    {
+      ok:    true,
+      icon:  Flame,
+      title: 'POSCI permanently burned',
+      hint:  `${(Number(totalBurned) / 1e18).toLocaleString()} POSCI (founder reserve + any genesis leftover) → unreachable forever`,
+    },
   ];
 
   const allOk = checks.every((c) => c.ok);
@@ -103,7 +129,7 @@ export function SystemHealth() {
           </div>
         )}
         {ready && !chain
-          ? Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)
+          ? Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-9 w-full" />)
           : checks.map(({ ok, icon: Icon, title, hint }) => (
             <div key={title} className="flex items-center gap-3 rounded-md border border-border/30 bg-secondary/20 p-2.5">
               <div className={`grid place-items-center h-7 w-7 rounded-md ${ok ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'}`}>

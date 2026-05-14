@@ -29,8 +29,13 @@ contract POSCIMining {
     uint256 public constant MAX_HALVINGS = 64;               // reward effectively 0 after this
     uint256 public constant BLOCKS_PER_READJUSTMENT = 1024;  // rewards per difficulty retarget
     uint256 public constant TARGET_INTERVAL = 60;            // seconds per reward target
-    uint256 public constant MAXIMUM_TARGET = 2 ** 234;       // easiest difficulty
+    uint256 public constant MAXIMUM_TARGET = 2 ** 234;       // easiest difficulty (retarget upper bound)
     uint256 public constant MINIMUM_TARGET = 2 ** 16;        // hardest difficulty cap
+    // Initial difficulty is set 64x harder than MAXIMUM_TARGET so the first
+    // 1024-mine epoch can't be vacuumed up by the first wallet to send a tx.
+    // Calibration: at ~5 MH/s aggregate hashrate this gives ~60s per mine,
+    // matching TARGET_INTERVAL. Retarget self-corrects from mine 1024 onward.
+    uint256 public constant INITIAL_TARGET = 2 ** 228;
     uint256 public constant TOTAL_MINING_SUPPLY = 20_000_000 * 1e18;
 
     // ---------------------------------------------------------------------
@@ -105,7 +110,7 @@ contract POSCIMining {
         miningStartTime = _miningStartTime;
         deployer = msg.sender;
 
-        miningTarget = MAXIMUM_TARGET;
+        miningTarget = INITIAL_TARGET;
         lastRetargetTime = _miningStartTime;
         // First challenge uses deployment block hash; subsequent challenges
         // use the previous block's hash on every successful mint.

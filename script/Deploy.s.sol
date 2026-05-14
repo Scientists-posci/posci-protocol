@@ -13,9 +13,11 @@ import {IPositionManager, IAllowanceTransfer} from "../src/interfaces/IUniswapV4
 ///   2. Deploy POSCIMining with timestamp gate
 ///   3. Deploy POSCIGenesis wired to mining + V4
 ///   4. Move 500_000 POSCI to genesis (250k sale + 250k LP)
-///   5. Move 20_000_000 POSCI to mining
+///   5. Move 20_500_000 POSCI to mining — the extra 500K (formerly the
+///      deployer reserve) sits past TOTAL_MINING_SUPPLY = 20M and is
+///      unreachable, so it is effectively burned. No founder allocation.
 ///   6. Bind genesis to mining, then renounce binding (one-shot lock)
-///   7. Deployer keeps remaining 500_000 POSCI
+///   7. Deployer ends with 0 POSCI — no reserve to hold or evacuate.
 ///
 /// Usage:
 ///   forge script script/Deploy.s.sol:DeployScript \
@@ -57,9 +59,12 @@ contract DeployScript is Script {
         );
         console2.log("POSCIGenesis:       ", address(genesis));
 
-        // 4-5. Distribute supply
-        token.transfer(address(genesis), 500_000 * 1e18);
-        token.transfer(address(mining),  20_000_000 * 1e18);
+        // 4-5. Distribute supply: 500K to genesis (250K sale + 250K LP, same
+        //      as v1) and 20.5M to mining. The extra 500K in mining is past
+        //      its 20M emission cap and is structurally unreachable — the
+        //      former founder reserve is effectively burned. Deployer = 0.
+        token.transfer(address(genesis), 500_000    * 1e18);
+        token.transfer(address(mining),  20_500_000 * 1e18);
 
         // 6. Bind genesis to mining (atomically renounces deployer's binding power)
         mining.bindGenesis(address(genesis));
@@ -71,9 +76,9 @@ contract DeployScript is Script {
         console2.log("Deployer POSCI:     ", token.balanceOf(deployer));
         console2.log("Genesis POSCI:      ", token.balanceOf(address(genesis)));
         console2.log("Mining POSCI:       ", token.balanceOf(address(mining)));
-        require(token.balanceOf(deployer)         == 500_000 * 1e18,    "deployer balance");
-        require(token.balanceOf(address(genesis)) == 500_000 * 1e18,    "genesis balance");
-        require(token.balanceOf(address(mining))  == 20_000_000 * 1e18, "mining balance");
+        require(token.balanceOf(deployer)         == 0,                 "deployer balance");
+        require(token.balanceOf(address(genesis)) == 500_000    * 1e18, "genesis balance");
+        require(token.balanceOf(address(mining))  == 20_500_000 * 1e18, "mining balance");
         require(mining.genesis() == address(genesis),                   "binding");
         require(mining.bindingRenounced(),                              "renounced (atomic)");
         require(mining.deployer() == deployer,                          "deployer immutable");

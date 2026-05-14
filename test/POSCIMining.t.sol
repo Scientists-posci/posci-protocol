@@ -19,6 +19,13 @@ contract POSCIMiningTest is Test {
 
         // Wire a fake "Genesis" — atomic, self-renouncing.
         mining.bindGenesis(FAKE_GENESIS);
+
+        // Production starts at INITIAL_TARGET (2^228) so _findNonce would
+        // exceed its 20M brute-force budget. Reset to MAXIMUM_TARGET (2^234)
+        // for fast nonce search; mining logic under test is independent of
+        // the specific target value.
+        // miningTarget lives in storage slot 1 (slot 0 = challengeNumber).
+        vm.store(address(mining), bytes32(uint256(1)), bytes32(mining.MAXIMUM_TARGET()));
     }
 
     // ------------------------------------------------------------------

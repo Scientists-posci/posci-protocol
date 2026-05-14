@@ -43,10 +43,17 @@ contract POSCIGenesisForkTest is Test {
             IPositionManager(V4_POSITION_MANAGER),
             IAllowanceTransfer(PERMIT2)
         );
-        token.transfer(address(genesis), 500_000 * 1e18);
-        token.transfer(address(mining),  20_000_000 * 1e18);
+        // 500K to Genesis (v1 distribution: 250K sale + 250K LP) and 20.5M to
+        // mining. Extra 500K in mining is past TOTAL_MINING_SUPPLY cap and
+        // unreachable — former founder reserve is effectively burned.
+        token.transfer(address(genesis), 500_000    * 1e18);
+        token.transfer(address(mining),  20_500_000 * 1e18);
         mining.bindGenesis(address(genesis));   // atomic, self-renouncing
         vm.stopPrank();
+
+        // Mining init target is 2^228 in production — reset to 2^234 for tests
+        // that don't exercise mining itself (this suite only opens the gate).
+        vm.store(address(mining), bytes32(uint256(1)), bytes32(mining.MAXIMUM_TARGET()));
 
         vm.deal(buyerA, 10 ether);
         vm.deal(buyerB, 10 ether);
