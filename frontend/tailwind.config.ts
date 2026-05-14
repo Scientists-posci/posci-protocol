@@ -63,7 +63,15 @@ const config: Config = {
         'float':          'float 4s ease-in-out infinite',
       },
       fontFamily: {
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        // `--font-sans` / `--font-mono` are injected by next/font in layout.tsx.
+        // Trailing entries handle CJK: prefer the user's system Chinese font
+        // (PingFang on macOS / Microsoft YaHei on Windows) so we don't ship
+        // a 6 MB Chinese webfont.
+        sans:    ['var(--font-sans)',  'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI',
+                  'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', 'Noto Sans SC',
+                  'sans-serif'],
+        mono:    ['var(--font-mono)',  'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+        display: ['var(--font-sans)',  'system-ui', 'sans-serif'],
       },
     },
   },

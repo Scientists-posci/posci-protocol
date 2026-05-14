@@ -1,9 +1,29 @@
 import type { Metadata, Viewport } from 'next';
+import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Providers } from './providers';
 import { SiteNav } from '@/components/feature/site-nav';
 import { SiteFooter } from '@/components/feature/site-footer';
 import { OrbitalBg } from '@/components/feature/orbital-bg';
 import './globals.css';
+
+// Self-hosted via next/font — no FOIT, no external CDN, optimal subsetting.
+// Inter at 100-700 unlocks the design system's `font-weight: 200` display
+// look + the cv11/ss01/ss03/ss04 OpenType features already in globals.css.
+const inter = Inter({
+  subsets:  ['latin', 'latin-ext'],
+  display:  'swap',
+  variable: '--font-sans',
+  weight:   ['200', '300', '400', '500', '600', '700'],
+});
+
+// JetBrains Mono for numbers, addresses, and any .font-mono / .tabular cell.
+// Built-in tabular figures, friendly slashed-zero, excellent at small sizes.
+const jbmono = JetBrains_Mono({
+  subsets:  ['latin'],
+  display:  'swap',
+  variable: '--font-mono',
+  weight:   ['400', '500', '600'],
+});
 
 export const metadata: Metadata = {
   title: 'POSCI — Proof of Scientist',
@@ -36,8 +56,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark">
-      <body className="min-h-screen relative overflow-x-hidden">
+    <html lang="en" className={`dark ${inter.variable} ${jbmono.variable}`}>
+      <body className="min-h-screen relative overflow-x-hidden font-sans">
         <OrbitalBg />
         <Providers>
           <SiteNav />

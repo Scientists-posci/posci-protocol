@@ -47,10 +47,22 @@
 
 @layer base {
   * { @apply border-border; }
-  html { font-feature-settings: 'cv11', 'ss01', 'ss03', 'ss04'; }
+
+  /* Inter OpenType features:
+       cv11 = single-storey lowercase 'a' / 'g' (more geometric)
+       ss01 = open digits (clearer 4, 6, 9)
+       ss03 = curved single-storey 'l'
+       ss04 = round 'i' tittle
+     These only resolve once Inter is actually loaded by next/font. */
+  html {
+    font-feature-settings: 'cv11', 'ss01', 'ss03', 'ss04';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased font-sans;
     /* Layered atmosphere: warm orange spark top-left, cool cyan top-right,
        deep void bottom. None of them are bright — they're tone shifts only. */
     background-image:
@@ -185,7 +197,13 @@
   animation: shimmer 2.4s linear infinite;
 }
 
-.tabular { font-variant-numeric: tabular-nums; }
+/* Tabular: monospace digits (so balances/hash-rates align column-wise) AND
+   slashed-zero for clear hex addresses. Apply via `className="tabular"`. */
+.tabular {
+  font-family: theme(fontFamily.mono);
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: 'tnum', 'zero';
+}
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: hsl(var(--background)); }
