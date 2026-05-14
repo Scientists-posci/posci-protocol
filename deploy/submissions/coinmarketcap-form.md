@@ -7,7 +7,7 @@
 
 | Field               | Value |
 |---------------------|-------|
-| Contract address    | 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+| Contract address    | 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 | Chain               | Ethereum (mainnet)
 | Project name        | Proof of Scientist
 | Symbol              | POSCI
@@ -18,8 +18,8 @@
 
 
 
-| Block explorer      | https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
-| Markets             | https://app.uniswap.org/#/swap?outputCurrency=0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77&chain=ethereum
+| Block explorer      | https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
+| Markets             | https://app.uniswap.org/#/swap?outputCurrency=0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c&chain=ethereum
 | Logo (256×256)      | upload assets/posci-logo-256.png
 
 ## Listing reasoning (paste into "Additional info")
@@ -30,5 +30,5 @@ Proof of Scientist (POSCI) is a fixed-supply fair-launch PoW token.
 - Initial LP burned to 0xdEaD on launch
 - Contract has no owner, no admin keys, no upgrade proxy
 - Verified source on Etherscan
-- Mining contract: 0x9EAdD7dF7701e03d07c3727EC1ba816C2C9De936
-- Genesis contract: 0x7bC1520Da49Cd56D5BE11aA77650cA998951459d
+- Mining contract: 0x37f9663Ef548b8192a73F54930D8Cd40ea1D1eAa
+- Genesis contract: 0x77Ba7F769341948cdE3C085d39B2C4ec572649Dd

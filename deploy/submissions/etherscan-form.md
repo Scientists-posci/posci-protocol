@@ -1,6 +1,6 @@
 # Etherscan token info — paste these into the form
 
-> URL to open: https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+> URL to open: https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 >   1. Sign in with the deployer wallet (the same one that deployed the contract)
 >   2. Click "More" → "Update Token Info"
 >   3. Sign the EIP-712 challenge

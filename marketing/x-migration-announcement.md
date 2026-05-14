@@ -26,9 +26,9 @@ POSCIToken and POSCIMining are unchanged byte-for-byte.
 
 **3/ New contract addresses**
 
-- Token:   `{{NEW_TOKEN_ADDRESS}}`
-- Mining:  `{{NEW_MINING_ADDRESS}}`
-- Genesis: `{{NEW_GENESIS_ADDRESS}}`
+- Token:   `0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c`
+- Mining:  `0x37f9663Ef548b8192a73F54930D8Cd40ea1D1eAa`
+- Genesis: `0x77Ba7F769341948cdE3C085d39B2C4ec572649Dd`
 
 v1 (deprecated, do not interact):
 - Token:   `0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77`
@@ -46,7 +46,7 @@ Both signed from the deployer wallet within the same window as v2 deploy. No one
 
 **5/ Mining will unlock when**
 
-- 24 hours after deploy: `{{V2_MINING_UNLOCK_UTC}}` UTC
+- 24 hours after deploy: `2026-05-14 08:10` UTC
 - ...whether or not Genesis filled.
 
 If Genesis still hasn't filled by then, anyone — including you — can hit "Force unlock mining" on scientistdapp.online/genesis. The contract handles the rest.
@@ -70,8 +70,8 @@ v1 Genesis cap-fill stalled, leaving mining permanently gated. v2 adds a permiss
 
 The v1 buyer was refunded ETH and airdropped equivalent v2 POSCI.
 
-- Token: `{{NEW_TOKEN_ADDRESS}}`
-- Mining: `{{NEW_MINING_ADDRESS}}`
-- Genesis: `{{NEW_GENESIS_ADDRESS}}`
+- Token: `0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c`
+- Mining: `0x37f9663Ef548b8192a73F54930D8Cd40ea1D1eAa`
+- Genesis: `0x77Ba7F769341948cdE3C085d39B2C4ec572649Dd`
 
 scientistdapp.online

@@ -1,6 +1,6 @@
 {
   "name": "POSCI Token List",
-  "timestamp": "2026-05-13T01:18:54.938Z",
+  "timestamp": "2026-05-14T02:12:40.878Z",
   "version": {
     "major": 1,
     "minor": 0,
@@ -15,7 +15,7 @@
   "tokens": [
     {
       "chainId": 1,
-      "address": "0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77",
+      "address": "0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c",
       "symbol": "POSCI",
       "name": "Proof of Scientist",
       "decimals": 18,

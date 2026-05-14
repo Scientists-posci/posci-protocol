@@ -16,7 +16,7 @@ export const PINNED = {
 The hash is YOUR address — nothing for MEV to steal.
 
 ⛏️ scientistdapp.online
-📜 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77`,
+📜 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c`,
 
   chinese:
 `$POSCI 科学家证明
@@ -27,7 +27,7 @@ The hash is YOUR address — nothing for MEV to steal.
 哈希包含你自己的地址，MEV 抢不走
 
 ⛏️ scientistdapp.online
-📜 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77`,
+📜 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c`,
 };
 
 export const THREAD_ENGLISH = [
@@ -37,8 +37,8 @@ export const THREAD_ENGLISH = [
 A 21,000,000-cap, owner-less, PoW-mined ERC20 on Ethereum.
 95% of supply is mined, not sold.
 
-CA: 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
-https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77`,
+CA: 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
+https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c`,
 
   // 2/7 — the name
 `2/ Why "Proof of Scientist"?
@@ -106,8 +106,8 @@ export const THREAD_CHINESE = [
 以太坊主网 · 21,000,000 总量 · 无管理员
 95% 通过 PoW 挖矿分发，不是卖给你
 
-CA: 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
-https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77`,
+CA: 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
+https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c`,
 
   // 2/7
 `2/ 为什么叫"科学家证明"？
@@ -215,7 +215,7 @@ This is what mining looked like before ASICs.
 • Uniswap V4 native (PoolManager + Permit2)
 • Atomic genesis: same tx fills cap + builds pool + burns LP
 
-https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77`,
+https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c`,
 
   noPresale:
 `$POSCI distribution:
@@ -252,7 +252,7 @@ https://scientistdapp.online/mine`,
 LP NFT just got burned to 0xdEaD in the same tx.
 Mining gate is now OPEN.
 
-Trade: https://app.uniswap.org/#/swap?outputCurrency=0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+Trade: https://app.uniswap.org/#/swap?outputCurrency=0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 
 Mine: https://scientistdapp.online/mine`,
 };

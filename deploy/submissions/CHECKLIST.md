@@ -1,12 +1,12 @@
 # POSCI launch — submission checklist
 
-Generated 2026-05-13T01:18:54.940Z for token at:
-  0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77  (mainnet)
-  https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+Generated 2026-05-14T02:12:40.879Z for token at:
+  0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c  (mainnet)
+  https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 
 Companion contracts:
-  Mining   : 0x9EAdD7dF7701e03d07c3727EC1ba816C2C9De936
-  Genesis  : 0x7bC1520Da49Cd56D5BE11aA77650cA998951459d
+  Mining   : 0x37f9663Ef548b8192a73F54930D8Cd40ea1D1eAa
+  Genesis  : 0x77Ba7F769341948cdE3C085d39B2C4ec572649Dd
 
 ---
 
@@ -21,11 +21,11 @@ Companion contracts:
 
 ### 1. Etherscan token info  ⭐ MOST IMPORTANT — wallets pull from here
 File: `etherscan-form.md`
-Open: https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+Open: https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 Use the deployer wallet to sign the EIP-712 challenge.
 
 ### 2. Coinbase Wallet (Base App)  ⭐ has huge mobile reach
-URL: https://wallet.coinbase.com → search 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77 → "Update here"
+URL: https://wallet.coinbase.com → search 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c → "Update here"
 Sign with deployer wallet, upload logo, ≤5 business days to approve.
 Alt: on-chain EAS attestation — see https://docs.base.org/base-chain/tools/tokens-in-wallet
 

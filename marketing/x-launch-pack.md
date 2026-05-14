@@ -14,13 +14,13 @@
 ## Live data (auto-filled into all tweets below)
 
 ```
-Token CA       : 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
-Mining contract: 0x9EAdD7dF7701e03d07c3727EC1ba816C2C9De936
-Genesis contract:0x7bC1520Da49Cd56D5BE11aA77650cA998951459d
-Etherscan      : https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+Token CA       : 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
+Mining contract: 0x37f9663Ef548b8192a73F54930D8Cd40ea1D1eAa
+Genesis contract:0x77Ba7F769341948cdE3C085d39B2C4ec572649Dd
+Etherscan      : https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 Frontend       : https://scientistdapp.online
 Twitter handle : @scientistsdapp
-Mining opens   : 2026-05-13 06:39 UTC  (gate 1)
+Mining opens   : 2026-05-14 08:10 UTC  (gate 1, v2 redeploy)
 ```
 
 ---
@@ -38,7 +38,7 @@ $POSCI — Proof of Scientist
 The hash is YOUR address — nothing for MEV to steal.
 
 ⛏️ scientistdapp.online
-📜 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+📜 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 ```
 
 ### 中文 (≤140 字)
@@ -52,7 +52,7 @@ $POSCI 科学家证明
 哈希包含你自己的地址，MEV 抢不走
 
 ⛏️ scientistdapp.online
-📜 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+📜 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 ```
 
 ---
@@ -67,8 +67,8 @@ $POSCI 科学家证明
 A 21,000,000-cap, owner-less, PoW-mined ERC20 on Ethereum.
 95% of supply is mined, not sold.
 
-CA: 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
-Verified: https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+CA: 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
+Verified: https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 ```
 
 ### 2/7 — the name
@@ -159,8 +159,8 @@ $POSCI #Ethereum #PoW
 以太坊主网 · 21,000,000 总量 · 无管理员
 95% 通过 PoW 挖矿分发，不是卖给你
 
-CA: 0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
-Etherscan：https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+CA: 0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
+Etherscan：https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 ```
 
 ### 2/7
@@ -300,7 +300,7 @@ $POSCI under the hood:
 • Uniswap V4 native (PoolManager + Permit2)
 • Atomic genesis: same tx fills cap + builds pool + burns LP
 
-https://etherscan.io/token/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+https://etherscan.io/token/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 ```
 
 ### E. The "no presale BS" angle
@@ -348,7 +348,7 @@ https://scientistdapp.online/mine
 LP NFT just got burned to 0xdEaD in the same tx.
 Mining gate is now OPEN.
 
-Trade: https://app.uniswap.org/#/swap?outputCurrency=0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77
+Trade: https://app.uniswap.org/#/swap?outputCurrency=0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c
 
 Mine: https://scientistdapp.online/mine
 ```
@@ -387,9 +387,9 @@ Status: https://scientistdapp.online/stats
 
 ```
 Read the contracts:
-• POSCIToken: https://etherscan.io/address/0xD020e5E5c2724B2661C2FEF9AE878f49410a8B77#code
-• POSCIMining: https://etherscan.io/address/0x9EAdD7dF7701e03d07c3727EC1ba816C2C9De936#code
-• POSCIGenesis: https://etherscan.io/address/0x7bC1520Da49Cd56D5BE11aA77650cA998951459d#code
+• POSCIToken: https://etherscan.io/address/0xFbcF59DE93B4c62e0EEe21280c9EAA75AFb1E26c#code
+• POSCIMining: https://etherscan.io/address/0x37f9663Ef548b8192a73F54930D8Cd40ea1D1eAa#code
+• POSCIGenesis: https://etherscan.io/address/0x77Ba7F769341948cdE3C085d39B2C4ec572649Dd#code
 
 No mint. No owner. No upgrade proxy. LP burned at bootstrap.
 Audit it yourself.
