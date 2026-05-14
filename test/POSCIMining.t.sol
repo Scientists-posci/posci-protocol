@@ -84,6 +84,61 @@ contract POSCIMiningTest is Test {
         assertEq(token.balanceOf(address(this)), balBefore + reward, "reward paid");
         assertEq(mining.epochCount(), 1);
         assertTrue(mining.solutionForChallenge(digest));
+        // Leaderboard tracking is recorded on every successful mine.
+        assertEq(mining.solutionsByMiner(address(this)), 1, "leaderboard count");
+        assertEq(mining.minersCount(), 1, "miners enumerable");
+        assertEq(mining.miners(0), address(this), "miner address recorded");
+    }
+
+    function test_Leaderboard_MultipleMinersAndBatch() public {
+        _openGates();
+
+        // 4 unique miners, each mines once. We can't easily mine twice from
+        // the same address in this fork-test because the challengeNumber
+        // would need to rotate between txs and the simplest way to do that
+        // (`vm.store`) interacts oddly with array-literal addressing — using
+        // `makeAddr` avoids that landmine. Single-mine each is enough to
+        // prove solutionsByMiner increments and miners[] grows.
+        address mA = makeAddr("minerA");
+        address mB = makeAddr("minerB");
+        address mC = makeAddr("minerC");
+        address mD = makeAddr("minerD");
+        address[4] memory addrs;
+        addrs[0] = mA;
+        addrs[1] = mB;
+        addrs[2] = mC;
+        addrs[3] = mD;
+
+        for (uint256 i = 0; i < 4; i++) {
+            // Rotate challengeNumber so each search hits a unique digest space.
+            vm.store(address(mining), bytes32(uint256(0)), bytes32(uint256(0x100 + i)));
+            (uint256 n, bytes32 d) = _findNonce(addrs[i]);
+            vm.prank(addrs[i]);
+            mining.mine(n, d);
+        }
+
+        assertEq(mining.minersCount(), 4, "4 unique miners tracked");
+        for (uint256 i = 0; i < 4; i++) {
+            assertEq(mining.solutionsByMiner(addrs[i]), 1, "single solution recorded");
+        }
+
+        // Page 0..2 returns the first two miners in insertion order.
+        (address[] memory page, uint256[] memory wins) = mining.topMinersBatch(0, 2);
+        assertEq(page.length, 2);
+        assertEq(page[0], mA);
+        assertEq(wins[0], 1);
+        assertEq(page[1], mB);
+        assertEq(wins[1], 1);
+
+        // Page past the end clamps cleanly.
+        (address[] memory tail, uint256[] memory tailWins) = mining.topMinersBatch(3, 10);
+        assertEq(tail.length, 1, "clamped to remaining");
+        assertEq(tail[0], mD);
+        assertEq(tailWins[0], 1);
+
+        // Page entirely out of range returns empty.
+        (address[] memory empty, ) = mining.topMinersBatch(99, 10);
+        assertEq(empty.length, 0);
     }
 
     function test_Mine_WrongDigest_Reverts() public {

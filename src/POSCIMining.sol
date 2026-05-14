@@ -71,6 +71,18 @@ contract POSCIMining {
     bool    public bindingRenounced;
 
     // ---------------------------------------------------------------------
+    // Miner leaderboard (cumulative solutions per address, enumerable)
+    // ---------------------------------------------------------------------
+    /// @notice Total successful solutions claimed by `miner`. Hashrate proxy.
+    mapping(address => uint256) public solutionsByMiner;
+    /// @notice Set on a miner's first successful claim. Backs `miners[]` to
+    ///         keep it deduplicated without sorting.
+    mapping(address => bool)    private _hasMined;
+    /// @notice Append-only list of every address that has mined at least once.
+    ///         Frontends paginate with `topMinersBatch` and sort off-chain.
+    address[] public miners;
+
+    // ---------------------------------------------------------------------
     // Events
     // ---------------------------------------------------------------------
     event Mined(
@@ -175,6 +187,12 @@ contract POSCIMining {
         unchecked {
             epochCount += 1;
             tokensMinted += reward;
+            solutionsByMiner[msg.sender] += 1;
+        }
+
+        if (!_hasMined[msg.sender]) {
+            _hasMined[msg.sender] = true;
+            miners.push(msg.sender);
         }
 
         token.safeTransfer(msg.sender, reward);
@@ -249,5 +267,31 @@ contract POSCIMining {
     ///         Useful for off-chain miners cross-checking.
     function checkDigest(address miner, uint256 nonce) external view returns (bytes32) {
         return keccak256(abi.encodePacked(challengeNumber, miner, nonce));
+    }
+
+    /// @notice Number of unique addresses that have ever mined.
+    function minersCount() external view returns (uint256) {
+        return miners.length;
+    }
+
+    /// @notice Paginated read of (address, solutionCount) pairs. Frontend
+    ///         iterates pages and sorts off-chain to render the leaderboard.
+    function topMinersBatch(uint256 start, uint256 count)
+        external view returns (address[] memory addrs, uint256[] memory wins)
+    {
+        uint256 total = miners.length;
+        if (start >= total) {
+            return (new address[](0), new uint256[](0));
+        }
+        uint256 end = start + count;
+        if (end > total) end = total;
+        uint256 n = end - start;
+        addrs = new address[](n);
+        wins  = new uint256[](n);
+        for (uint256 i = 0; i < n; i++) {
+            address m = miners[start + i];
+            addrs[i] = m;
+            wins[i]  = solutionsByMiner[m];
+        }
     }
 }

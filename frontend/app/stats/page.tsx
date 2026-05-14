@@ -3,6 +3,7 @@ import { PoolStats }        from '@/components/feature/pool-stats';
 import { NetworkStats }     from '@/components/feature/network-stats';
 import { LiveMiningFeed }   from '@/components/feature/live-mining-feed';
 import { GenesisActivity }  from '@/components/feature/genesis-activity';
+import { Leaderboard }      from '@/components/feature/leaderboard';
 import { SystemHealth }     from '@/components/feature/system-health';
 
 export const metadata = {
@@ -39,6 +40,9 @@ export default function StatsPage() {
         <LiveMiningFeed />
         <GenesisActivity />
       </section>
+
+      {/* Top miners leaderboard */}
+      <Leaderboard />
 
       {/* Health checklist + contract directory */}
       <SystemHealth />
