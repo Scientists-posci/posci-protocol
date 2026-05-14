@@ -39,8 +39,8 @@ v1 (deprecated, do not interact):
 
 One wallet bought 0.0006 ETH worth of POSCI on v1. They were made whole:
 
-- ETH refund tx: `{{REFUND_TX_HASH}}`
-- New POSCI airdrop tx: `{{AIRDROP_TX_HASH}}`
+- ETH refund tx: `0x19715ed2b14b49324162ed986af9c726f53c9225bdd8b0c6ecdff7c00c163b48`
+- New POSCI airdrop tx: `0xf07920f043338e9abc5b9e56e9779e3d6e6492db0d6f7e882520b7311151640f`
 
 Both signed from the deployer wallet within the same window as v2 deploy. No one is left holding worthless v1 tokens.
 
