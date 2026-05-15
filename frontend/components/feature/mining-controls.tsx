@@ -27,6 +27,48 @@ import { formatHashrate, shortAddr } from '@/lib/utils';
 // gas limit on top of their own inflated estimateGas.
 const MINE_GAS_LIMIT = 240_000n;
 
+type GasTier = 'standard' | 'fast' | 'aggressive' | 'custom';
+
+const GAS_TIER_LABELS: Record<GasTier, string> = {
+  standard:   'Standard',
+  fast:       'Fast',
+  aggressive: 'Turbo',
+  custom:     'Custom',
+};
+
+// Convert a base EIP-1559 fee suggestion to the actual fees this tx will
+// pay, scaled by the user's chosen tier. Returns undefined if the network
+// estimate isn't loaded yet (caller falls back to wallet defaults).
+function feesForTier(
+  tier: GasTier,
+  baseMaxFee: bigint | undefined,
+  basePriority: bigint | undefined,
+  customPriorityGwei: string,
+  customMaxGwei: string,
+): { maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint } | undefined {
+  if (tier === 'custom') {
+    const p = customPriorityGwei.trim();
+    const m = customMaxGwei.trim();
+    if (!p && !m) return undefined; // no overrides → wallet defaults
+    const out: { maxFeePerGas?: bigint; maxPriorityFeePerGas?: bigint } = {};
+    if (p) out.maxPriorityFeePerGas = BigInt(Math.round(parseFloat(p) * 1e9));
+    if (m) out.maxFeePerGas = BigInt(Math.round(parseFloat(m) * 1e9));
+    return out;
+  }
+  if (!baseMaxFee || !basePriority) return undefined;
+  // Tier multipliers chosen so each step ~doubles inclusion priority:
+  //   standard   = network suggestion (no override needed but explicit)
+  //   fast       = 2× priority, 1.5× max
+  //   aggressive = 4× priority, 2× max
+  const mult = tier === 'standard' ? { p: 1, m: 1 }
+             : tier === 'fast'     ? { p: 2, m: 1.5 }
+             : /* aggressive */      { p: 4, m: 2 };
+  return {
+    maxPriorityFeePerGas: (basePriority * BigInt(Math.round(mult.p * 1000))) / 1000n,
+    maxFeePerGas:         (baseMaxFee   * BigInt(Math.round(mult.m * 1000))) / 1000n,
+  };
+}
+
 export function MiningControls() {
   const { address, isConnected } = useAccount();
   const [manager] = useState(() => new MiningManager());
@@ -42,7 +84,17 @@ export function MiningControls() {
   const [gpuError, setGpuError] = useState<string | null>(null);
   const { data: feeData } = useEstimateFeesPerGas({ query: { refetchInterval: 12_000 } });
   const [solutions, setSolutions] = useState<{ nonce: bigint; digest: Hex; source: 'cpu' | 'gpu'; submitted?: boolean }[]>([]);
+  const [minedThisSession, setMinedThisSession] = useState(0);
+  const [gasTier, setGasTier] = useState<'standard' | 'fast' | 'aggressive' | 'custom'>('fast');
+  const [customPriorityGwei, setCustomPriorityGwei] = useState('');
+  const [customMaxGwei, setCustomMaxGwei] = useState('');
   const submitting = useRef(false);
+  // After a tx is broadcast, hits found on the still-stale on-chain
+  // challenge would auto-submit and revert — burning gas. We hold the gate
+  // closed until the polled challenge actually rotates and the workers are
+  // hot-swapped to the new job.
+  const awaitingRotation = useRef(false);
+  const prevChallenge = useRef<Hex | undefined>(undefined);
 
   const { data, refetch } = useReadContracts({
     contracts: [
@@ -61,7 +113,24 @@ export function MiningControls() {
   const canMine        = isConnected && challenge && target && timeOpen && poolOpen === true;
 
   const { writeContractAsync, data: txHash } = useWriteContract();
-  const { isLoading: txConfirming, isSuccess: txSuccess } = useWaitForTransactionReceipt({ hash: txHash });
+  const { isLoading: txConfirming, isSuccess: receiptAvailable, data: receipt } = useWaitForTransactionReceipt({ hash: txHash });
+  const txConfirmed = receiptAvailable && receipt?.status === 'success';
+  const txReverted  = receiptAvailable && receipt?.status === 'reverted';
+
+  // Mirror the React state the (closure-captured) 'hit' handler needs.
+  // Without this, the handler — registered once in a useEffect([]) — would
+  // forever see the initial render's undefined challenge/target and ignore
+  // every hit.
+  const handlerStateRef = useRef({
+    challenge, target,
+    gasTier, customPriorityGwei, customMaxGwei,
+    feeData,
+  });
+  handlerStateRef.current = {
+    challenge, target,
+    gasTier, customPriorityGwei, customMaxGwei,
+    feeData,
+  };
 
   useEffect(() => {
     manager.probeGpu().then((ok) => {
@@ -76,10 +145,23 @@ export function MiningControls() {
     });
     manager.on('hit', async (h) => {
       setSolutions((prev) => [{ ...h }, ...prev].slice(0, 8));
-      // Auto-submit the first solution we find on this challenge.
-      if (submitting.current) return;
+      // Two gates for auto-submit:
+      //  1. submitting — a tx is currently being signed/broadcast.
+      //  2. awaitingRotation — a tx was broadcast, but the on-chain challenge
+      //     hasn't rotated yet. Hits found in this window are on a stale
+      //     challenge and would revert with WrongDigest (burning gas).
+      if (submitting.current || awaitingRotation.current) return;
+      const live = handlerStateRef.current;
+      if (!live.challenge || !live.target) return;
       submitting.current = true;
       try {
+        const fees = feesForTier(
+          live.gasTier,
+          live.feeData?.maxFeePerGas,
+          live.feeData?.maxPriorityFeePerGas,
+          live.customPriorityGwei,
+          live.customMaxGwei,
+        );
         await writeContractAsync({
           address: MINING_ADDRESS,
           abi: MINING_ABI,
@@ -89,9 +171,14 @@ export function MiningControls() {
           // estimateGas. Actual usage is ~110–180k; 240k is the headroom
           // we need for first-mine + retarget edge cases.
           gas: MINE_GAS_LIMIT,
+          ...(fees ?? {}),
         });
-        toast.success('Solution submitted', { description: `${h.source.toUpperCase()} hit at nonce ${h.nonce.toString()}` });
-        manager.stop(); setRunning(false);
+        toast.success('Solution submitted', {
+          description: `${h.source.toUpperCase()} hit · waiting for confirmation, mining continues…`,
+        });
+        // Don't stop the manager — workers keep hashing. We just close the
+        // gate until the challenge rotates so we don't ship a stale tx.
+        awaitingRotation.current = true;
       } catch (e: any) {
         toast.error('Submit failed', { description: e?.shortMessage ?? e?.message ?? 'unknown error' });
       } finally {
@@ -105,12 +192,45 @@ export function MiningControls() {
   useEffect(() => { manager.setCpuWorkers(useCpu ? cpuWorkers : 0); }, [cpuWorkers, useCpu, manager]);
   useEffect(() => { manager.setGpuPower(gpuPower); }, [gpuPower, manager]);
 
+  // ── tx receipt → session counter & rapid re-poll ──────────────────────
+  // Receipt.status === 'success' means our mine() landed. We bump the
+  // session counter and refetch the chain immediately so the rotation
+  // effect below can hot-swap workers without waiting up to 6s for the
+  // next poll tick.
   useEffect(() => {
-    if (txSuccess) {
-      toast.success('Block mined!', { description: 'Reward credited to your wallet.' });
+    if (txConfirmed) {
+      setMinedThisSession((n) => n + 1);
+      toast.success('Block mined!', { description: 'Reward credited. Switching to the new challenge…' });
+      refetch();
+    } else if (txReverted) {
+      toast.error('Submission reverted', {
+        description: 'Likely beaten to the block by another miner. Re-opening for the next challenge.',
+      });
+      // Don't wait for rotation — let the worker submit on the next hit
+      // (which will be on whatever the current challenge is).
+      awaitingRotation.current = false;
       refetch();
     }
-  }, [txSuccess, refetch]);
+  }, [txConfirmed, txReverted, refetch]);
+
+  // ── challenge rotation → hot-swap manager job ─────────────────────────
+  // When the on-chain challenge advances (either our tx landed, or someone
+  // else's did), tell the manager to retarget every worker at the new
+  // challenge / new mining target. Without this the workers keep hashing
+  // the stale challenge and produce solutions that revert.
+  useEffect(() => {
+    if (!running || !challenge || !target || !address) {
+      prevChallenge.current = challenge;
+      return;
+    }
+    if (prevChallenge.current && prevChallenge.current !== challenge) {
+      manager.setJob(challenge, address, target).catch((e) => {
+        console.warn('[posci] hot-swap challenge failed:', e);
+      });
+      awaitingRotation.current = false;
+    }
+    prevChallenge.current = challenge;
+  }, [challenge, target, running, address, manager]);
 
   async function start() {
     if (!canMine || !address || !challenge || !target) {
@@ -118,7 +238,11 @@ export function MiningControls() {
       return;
     }
     setSolutions([]);
+    setMinedThisSession(0);
     setGpuError(null);
+    submitting.current = false;
+    awaitingRotation.current = false;
+    prevChallenge.current = challenge;
     try {
       const r = await manager.start(challenge, address, target, useCpu, useGpu && gpuAvailable);
       setRunning(r.cpuStarted || r.gpuStarted);
@@ -142,17 +266,27 @@ export function MiningControls() {
   function stop() {
     manager.stop();
     setRunning(false);
+    submitting.current = false;
+    awaitingRotation.current = false;
   }
 
   const totalRate = cpuHashrate + gpuHashrate;
 
-  // Estimated ETH cost of a single mine() tx at current fees. ~150k gas is
-  // the typical actual usage (240k is the limit we set to cap wallet padding;
-  // base fee is only billed on gas used, not limit). Shows the user upfront
-  // what each successful solution will burn.
-  const gasFeeWei = feeData?.maxFeePerGas;
-  const estCostEth = gasFeeWei ? formatEther(gasFeeWei * 150_000n) : null;
-  const baseFeeGwei = gasFeeWei ? Number(gasFeeWei / 1_000_000_000n) : null;
+  // Effective fees for the currently-selected tier. ~150k is the typical
+  // actual gas used per mine() (240k limit only caps wallet padding; base
+  // fee is billed on gas used, not the limit).
+  const tierFees = feesForTier(
+    gasTier,
+    feeData?.maxFeePerGas,
+    feeData?.maxPriorityFeePerGas,
+    customPriorityGwei,
+    customMaxGwei,
+  );
+  const effectiveMax  = tierFees?.maxFeePerGas         ?? feeData?.maxFeePerGas;
+  const effectivePrio = tierFees?.maxPriorityFeePerGas ?? feeData?.maxPriorityFeePerGas;
+  const estCostEth    = effectiveMax ? formatEther(effectiveMax * 150_000n) : null;
+  const tipGwei       = effectivePrio ? Number(effectivePrio) / 1e9 : null;
+  const maxGwei       = effectiveMax  ? Number(effectiveMax)  / 1e9 : null;
 
   return (
     <Card className="overflow-hidden">
@@ -256,11 +390,19 @@ export function MiningControls() {
 
         {/* Total + actions */}
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <div className="text-xs uppercase tracking-wider text-muted-foreground">Total hashrate</div>
-            <div className="text-3xl font-light tabular text-foreground">
-              {formatHashrate(totalRate)}
+          <div className="flex items-baseline gap-6">
+            <div>
+              <div className="text-xs uppercase tracking-wider text-muted-foreground">Total hashrate</div>
+              <div className="text-3xl font-light tabular text-foreground">
+                {formatHashrate(totalRate)}
+              </div>
             </div>
+            {running && (
+              <div>
+                <div className="text-xs uppercase tracking-wider text-muted-foreground">Mined this session</div>
+                <div className="text-3xl font-light tabular text-accent">{minedThisSession}</div>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             {!running ? (
@@ -275,17 +417,70 @@ export function MiningControls() {
           </div>
         </div>
 
-        {/* Gas preview — what each successful solution costs to submit */}
-        {isConnected && estCostEth && baseFeeGwei != null && (
-          <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-secondary/20 px-4 py-2.5 text-xs">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Fuel className="h-3.5 w-3.5" />
-              <span>Per-solution gas (mainnet)</span>
+        {/* Gas tier — let users pay more to avoid getting beaten / stuck */}
+        {isConnected && (
+          <div className="space-y-2 rounded-md border border-border/50 bg-secondary/20 px-4 py-3">
+            <div className="flex items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Fuel className="h-3.5 w-3.5" />
+                <span>Gas tier · per-solution cost</span>
+              </div>
+              <div className="font-mono tabular text-foreground">
+                {estCostEth ? `≈ ${Number(estCostEth).toFixed(5)} ETH` : '— ETH'}
+                {tipGwei != null && maxGwei != null && (
+                  <span className="ml-2 text-muted-foreground">({tipGwei.toFixed(2)}/{maxGwei.toFixed(2)} gwei tip/max)</span>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-3 font-mono tabular">
-              <span className="text-muted-foreground">{baseFeeGwei} gwei</span>
-              <span className="text-foreground">≈ {Number(estCostEth).toFixed(5)} ETH</span>
+            <div className="grid grid-cols-4 gap-1">
+              {(['standard','fast','aggressive','custom'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setGasTier(t)}
+                  className={`rounded px-2 py-1.5 text-xs font-medium border transition-colors ${
+                    gasTier === t
+                      ? 'border-accent/60 bg-accent/15 text-accent'
+                      : 'border-border/60 bg-card/40 text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {GAS_TIER_LABELS[t]}
+                </button>
+              ))}
             </div>
+            {gasTier === 'custom' && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Priority tip (gwei)
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    placeholder="2"
+                    value={customPriorityGwei}
+                    onChange={(e) => setCustomPriorityGwei(e.target.value)}
+                    className="rounded border border-border/60 bg-card/60 px-2 py-1 font-mono tabular text-sm text-foreground focus:outline-none focus:border-accent/60"
+                  />
+                </label>
+                <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+                  Max fee (gwei)
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.1"
+                    placeholder="auto"
+                    value={customMaxGwei}
+                    onChange={(e) => setCustomMaxGwei(e.target.value)}
+                    className="rounded border border-border/60 bg-card/60 px-2 py-1 font-mono tabular text-sm text-foreground focus:outline-none focus:border-accent/60"
+                  />
+                </label>
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              Mining is a race — higher tip = first inclusion. Pick Turbo if you keep losing blocks to other miners. Max fee caps what you'll ever pay per gas; you only spend the actual base fee + tip.
+            </p>
           </div>
         )}
 
@@ -320,7 +515,7 @@ export function MiningControls() {
                       <TooltipContent>{s.digest}</TooltipContent>
                     </Tooltip>
                     {txConfirming && i === 0 && <span className="text-amber-400">submitting…</span>}
-                    {txSuccess    && i === 0 && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
+                    {txConfirmed  && i === 0 && <CheckCircle2 className="h-3 w-3 text-emerald-400" />}
                   </motion.div>
                 ))}
               </div>

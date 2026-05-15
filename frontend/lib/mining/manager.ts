@@ -20,6 +20,10 @@ export class MiningManager {
   private workers: Worker[] = [];
   private gpu: GpuMiner | null = null;
   private gpuPromise: Promise<GpuMiner | null> | null = null;
+  // Resolves when the in-flight GPU mining loop exits (i.e. after gpu.stop()
+  // and the current dispatch's mapAsync finishes). startGpu awaits this
+  // before re-entering the loop, so we can't double-map the read buffer.
+  private gpuRunPromise: Promise<void> | null = null;
   private job: MiningJob | null = null;
   private listeners: Partial<ManagerEvents> = {};
 
@@ -192,6 +196,13 @@ export class MiningManager {
    */
   private async startGpu(): Promise<boolean> {
     if (!this.job) return false;
+    // If a previous loop is still winding down (waiting on mapAsync), drain
+    // it before launching the next one — otherwise both loops race the same
+    // read buffer and WebGPU refuses the second mapAsync.
+    if (this.gpuRunPromise) {
+      await this.gpuRunPromise;
+      this.gpuRunPromise = null;
+    }
     if (!this.gpu) {
       // Recreate the promise on every startup. The previous design cached a
       // single rejected promise forever, so a transient failure (driver
@@ -223,8 +234,9 @@ export class MiningManager {
     const gpuStartNonce = this.job.startNonce + BigInt(this.cpuWorkerCount); // disjoint from CPU lanes
     this.gpuStats.active = true;
 
-    // Run forever — promise resolves when stop() is called.
-    this.gpu.start({
+    // Track the run promise so setJob / next start can await its exit
+    // before launching the next loop.
+    this.gpuRunPromise = this.gpu.start({
       challenge: this.job.challenge,
       miner: this.job.miner,
       target: this.job.target,
@@ -243,6 +255,64 @@ export class MiningManager {
       this.emitState();
     });
     return true;
+  }
+
+  /**
+   * Hot-swap the mining job (new challenge / target) without tearing down
+   * the GPU device or the manager. Keeps the engines running through a
+   * challenge rotation so the user doesn't see a 0 H/s gap every minute.
+   */
+  async setJob(challenge: Hex, miner: Address, target: bigint): Promise<void> {
+    if (!this.job) return; // nothing to swap into
+    this.job = {
+      challenge,
+      miner,
+      target,
+      startNonce: BigInt(Math.floor(Math.random() * 0xffffffff)),
+    };
+    // Rebase the hashrate EMA so the brief restart gap doesn't tank the
+    // displayed rate.
+    const now = Date.now();
+    this.cpuLastSampleAt = now;
+    this.gpuLastSampleAt = now;
+    this.cpuLastSampleAttempts = this.cpuAttempts;
+    this.gpuLastSampleAttempts = this.gpuAttempts;
+
+    // CPU: terminate + respawn (cheap — ~50ms total)
+    if (this.cpuStats.active) {
+      this.stopCpu();
+      this.startCpu();
+    }
+    // GPU: signal stop, await loop exit, relaunch with new params (reuses
+    // device + pipeline + buffers, so ~10–30ms vs ~1–2s for a full rebuild).
+    if (this.gpu && this.gpuStats.active) {
+      this.gpu.stop();
+      if (this.gpuRunPromise) {
+        await this.gpuRunPromise;
+        this.gpuRunPromise = null;
+      }
+      this.gpuStats.active = true;
+      const reservedStride = BigInt(this.cpuWorkerCount + 1);
+      const gpuStartNonce = this.job.startNonce + BigInt(this.cpuWorkerCount);
+      this.gpuRunPromise = this.gpu.start({
+        challenge: this.job.challenge,
+        miner: this.job.miner,
+        target: this.job.target,
+        startNonce: gpuStartNonce * reservedStride,
+        powerWorkgroups: this.gpuPower,
+        onHit: (nonce, digest) => {
+          this.listeners.hit?.({ nonce, digest, source: 'gpu' });
+        },
+        onProgress: (delta) => {
+          this.gpuAttempts += BigInt(delta);
+        },
+      }).catch((e) => {
+        console.warn('[posci] GPU mining loop error after job swap:', e);
+        this.gpuStats.active = false;
+        this.emitState();
+      });
+    }
+    this.emitState();
   }
 
   private stopGpu() {
