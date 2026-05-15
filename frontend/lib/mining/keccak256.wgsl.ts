@@ -13,13 +13,18 @@
  * Verified by `lib/mining/gpu-miner.ts` self-test against js-sha3 on init.
  */
 export const KECCAK256_WGSL = /* wgsl */`
+// NOTE: do NOT name a struct member 'target' — it's in the WGSL reserved-
+// words list (spec 3.3) and Intel's Tint backend (Gen 12 LP / Iris Xe)
+// rejects it with "'target' is a reserved keyword". Chrome's D3D12/Metal
+// backends happen to be more lenient. Same goes for: select, module, ref,
+// asm, set, register, varying, layout, sizeof — all reserved.
 struct Params {
-  challenge: array<vec4<u32>, 2>,   // 8 LE u32 limbs of the challenge bytes
-  miner:     array<vec4<u32>, 2>,   // 5 LE u32 limbs of the address (last 12 bytes ignored)
-  target:    array<vec4<u32>, 2>,   // 8 BE u32 limbs of the mining target (uint256)
-  baseNonce: vec2<u32>,             // (low, high) of the nonce origin for this dispatch
-  perThread: u32,
-  _pad:      u32,
+  challenge:  array<vec4<u32>, 2>,  // 8 LE u32 limbs of the challenge bytes
+  miner:      array<vec4<u32>, 2>,  // 5 LE u32 limbs of the address (last 12 bytes ignored)
+  mineTarget: array<vec4<u32>, 2>,  // 8 BE u32 limbs of the mining target (uint256)
+  baseNonce:  vec2<u32>,            // (low, high) of the nonce origin for this dispatch
+  perThread:  u32,
+  _pad:       u32,
 };
 
 struct Hit {
@@ -147,8 +152,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let ch1 = params.challenge[1];
   let mn0 = params.miner[0];
   let mn1 = params.miner[1];
-  let tg0 = params.target[0];
-  let tg1 = params.target[1];
+  let tg0 = params.mineTarget[0];
+  let tg1 = params.mineTarget[1];
 
   // base + threadId * perThread, treated as u64
   let threadOffset = gid.x * perThread;
