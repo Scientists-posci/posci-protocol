@@ -136,25 +136,6 @@ fn keccakF(state: ptr<function, array<vec2<u32>, 25>>) {
   }
 }
 
-// Index one of 8 u32 limbs out of a pair of vec4<u32>. Taking the two
-// vec4s by value (rather than the whole array) avoids triggering the
-// array-by-value-from-uniform pattern that mis-compiles on several
-// real-world WebGPU backends (Apple Metal, Intel UHD on D3D12, some
-// Mesa Vulkan paths) — which is exactly what causes the GPU self-test
-// to fail on integrated graphics.
-fn limb8FromPair(v0: vec4<u32>, v1: vec4<u32>, i: u32) -> u32 {
-  switch (i) {
-    case 0u: { return v0.x; }
-    case 1u: { return v0.y; }
-    case 2u: { return v0.z; }
-    case 3u: { return v0.w; }
-    case 4u: { return v1.x; }
-    case 5u: { return v1.y; }
-    case 6u: { return v1.z; }
-    default: { return v1.w; }
-  }
-}
-
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let perThread = params.perThread;
@@ -219,15 +200,30 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     d[6] = bswap32(st[3].x);
     d[7] = bswap32(st[3].y);
 
-    // ---- compare digest ≤ target as big-endian uint256 ----
-    var leq = true;
-    var decided = false;
-    for (var k: u32 = 0u; k < 8u; k = k + 1u) {
-      if (decided) { continue; }
-      let tk = limb8FromPair(tg0, tg1, k);
-      if (d[k] < tk) { leq = true;  decided = true; }
-      if (d[k] > tk) { leq = false; decided = true; }
-    }
+    // ---- compare digest <= target as big-endian uint256 ----
+    // Flat if/else chain. Earlier versions used a decided-flag inside a
+    // for-loop with continue, which mis-compiled on some integrated GPU
+    // shader compilers (Intel/AMD on D3D12, certain Mesa Vulkan paths) and
+    // caused the self-test to "produce no hit" — every thread thought the
+    // digest was greater than the max target.
+    var leq: bool;
+    if      (d[0] < tg0.x) { leq = true; }
+    else if (d[0] > tg0.x) { leq = false; }
+    else if (d[1] < tg0.y) { leq = true; }
+    else if (d[1] > tg0.y) { leq = false; }
+    else if (d[2] < tg0.z) { leq = true; }
+    else if (d[2] > tg0.z) { leq = false; }
+    else if (d[3] < tg0.w) { leq = true; }
+    else if (d[3] > tg0.w) { leq = false; }
+    else if (d[4] < tg1.x) { leq = true; }
+    else if (d[4] > tg1.x) { leq = false; }
+    else if (d[5] < tg1.y) { leq = true; }
+    else if (d[5] > tg1.y) { leq = false; }
+    else if (d[6] < tg1.z) { leq = true; }
+    else if (d[6] > tg1.z) { leq = false; }
+    else if (d[7] < tg1.w) { leq = true; }
+    else if (d[7] > tg1.w) { leq = false; }
+    else                   { leq = true; } // exactly equal counts as ≤
 
     if (leq) {
       let idx = atomicAdd(&hits.count, 1u);

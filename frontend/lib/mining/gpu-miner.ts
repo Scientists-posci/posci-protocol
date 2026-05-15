@@ -124,7 +124,39 @@ export async function createGpuMiner(): Promise<GpuMiner | null> {
   const device = await adapter.requestDevice();
   if (!device) return null;
 
+  // Surface adapter info so when a self-test fails the user can tell us
+  // exactly which GPU / driver combination it was (crucial for triaging
+  // integrated-graphics issues).
+  let adapterTag = '';
+  try {
+    const info = (adapter as any).info ?? (await (adapter as any).requestAdapterInfo?.()) ?? {};
+    adapterTag = [info.vendor, info.architecture, info.device].filter(Boolean).join(' / ');
+  } catch { /* info is best-effort */ }
+
+  // Capture any silent driver-side validation errors that happen during
+  // device usage. Without this the only signal we get is "self-test
+  // produced no hit" with no idea why the dispatch did nothing.
+  (device as any).addEventListener?.('uncapturederror', (ev: any) => {
+    console.warn('[posci] WebGPU uncaptured error:', ev?.error?.message ?? ev);
+  });
+
   const module = device.createShaderModule({ code: KECCAK256_WGSL });
+
+  // Pull WGSL compile messages BEFORE first use. Some backends silently
+  // drop dispatches when the shader had warnings the validator promoted
+  // to errors — this is what makes "produced no hit" so confusing.
+  try {
+    const ci = await (module as any).getCompilationInfo?.();
+    const errors = (ci?.messages ?? []).filter((m: any) => m.type === 'error');
+    if (errors.length > 0) {
+      const e0 = errors[0];
+      throw new Error(`WGSL compile error${adapterTag ? ` on ${adapterTag}` : ''}: ${e0.message} (line ${e0.lineNum}:${e0.linePos})`);
+    }
+  } catch (e: any) {
+    if (e?.message?.startsWith('WGSL compile error')) throw e;
+    // getCompilationInfo not supported on this implementation — ignore.
+  }
+
   const pipeline = device.createComputePipeline({
     layout: 'auto',
     compute: { module, entryPoint: 'main' },
@@ -176,6 +208,11 @@ export async function createGpuMiner(): Promise<GpuMiner | null> {
     writeParams(device, paramsBuffer, testChallenge, testMiner, target, baseNonce, 1);
     device.queue.writeBuffer(hitsBuffer, 0, new Uint32Array([0, 0, 0, 0]));
 
+    // Wrap the dispatch in a validation error scope so that any GPU-side
+    // problem (bad bind group, validation, OOM) becomes a real Error
+    // instead of going to the console and leaving us with count===0 and
+    // no explanation.
+    (device as any).pushErrorScope?.('validation');
     const enc = device.createCommandEncoder();
     const pass = enc.beginComputePass();
     pass.setPipeline(pipeline);
@@ -189,8 +226,18 @@ export async function createGpuMiner(): Promise<GpuMiner | null> {
     const arr = new Uint32Array(readBuffer.getMappedRange().slice(0));
     readBuffer.unmap();
 
+    const validationErr = await (device as any).popErrorScope?.();
+    if (validationErr) {
+      throw new Error(`GPU validation${adapterTag ? ` on ${adapterTag}` : ''}: ${validationErr.message}`);
+    }
+
     const count = arr[0];
-    if (count === 0) throw new Error('GPU self-test produced no hit');
+    if (count === 0) {
+      throw new Error(
+        `GPU self-test produced no hit${adapterTag ? ` on ${adapterTag}` : ''}` +
+        ` — shader dispatched but hits.count stayed 0 with target=MAX (atomicAdd or compare loop mis-compiled).`
+      );
+    }
 
     // First hit is at byte offset 16
     const firstDigest = new Uint8Array(32);
@@ -209,7 +256,11 @@ export async function createGpuMiner(): Promise<GpuMiner | null> {
     const refDigest = new Uint8Array(keccak_256.arrayBuffer(refInput));
     for (let i = 0; i < 32; i++) {
       if (firstDigest[i] !== refDigest[i]) {
-        throw new Error(`GPU self-test mismatch at byte ${i}: gpu=${firstDigest[i].toString(16)} ref=${refDigest[i].toString(16)}`);
+        throw new Error(
+          `GPU self-test digest mismatch at byte ${i}${adapterTag ? ` on ${adapterTag}` : ''}:` +
+          ` gpu=0x${firstDigest[i].toString(16).padStart(2,'0')}` +
+          ` ref=0x${refDigest[i].toString(16).padStart(2,'0')}`
+        );
       }
     }
   }
