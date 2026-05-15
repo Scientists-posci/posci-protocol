@@ -5,8 +5,8 @@
 'use client';
 
 import type { Address, Hex } from 'viem';
-import type { ManagerState, MiningHit, MiningJob, EngineStats } from './types';
-import { createGpuMiner, isWebGpuSupported, type GpuMiner } from './gpu-miner';
+import type { ManagerState, MiningHit, MiningJob, EngineStats, GpuStatus } from './types';
+import { createGpuMiner, probeWebGpu, type GpuMiner } from './gpu-miner';
 
 const SMOOTH_ALPHA = 0.18; // EMA factor for hashrate smoothing
 const STATS_TICK_MS = 500;
@@ -36,6 +36,7 @@ export class MiningManager {
   private cpuWorkerCount = Math.max(1, Math.min(16, navigator?.hardwareConcurrency ?? 4));
   private gpuPower = 64;
   private gpuAvailable = false;
+  private gpuStatus: GpuStatus = 'unprobed';
   private statsTimer: ReturnType<typeof setInterval> | null = null;
 
   on<K extends keyof ManagerEvents>(event: K, fn: ManagerEvents[K]) {
@@ -59,12 +60,19 @@ export class MiningManager {
   async probeGpu(): Promise<boolean> {
     if (this.gpuAvailable) return true;
     try {
-      this.gpuAvailable = await isWebGpuSupported();
-    } catch {
+      this.gpuStatus = await probeWebGpu();
+      this.gpuAvailable = this.gpuStatus === 'ok';
+    } catch (e) {
+      console.warn('[posci] probeGpu threw:', e);
+      this.gpuStatus = 'error';
       this.gpuAvailable = false;
     }
     this.emitState();
     return this.gpuAvailable;
+  }
+
+  getGpuStatus(): GpuStatus {
+    return this.gpuStatus;
   }
 
   async start(challenge: Hex, miner: Address, target: bigint, useCpu: boolean, useGpu: boolean) {
@@ -233,6 +241,7 @@ export class MiningManager {
       cpuWorkers: this.cpuWorkerCount,
       gpuPower: this.gpuPower,
       gpuAvailable: this.gpuAvailable,
+      gpuStatus: this.gpuStatus,
     });
   }
 }

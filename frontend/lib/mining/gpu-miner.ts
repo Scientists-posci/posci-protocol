@@ -86,21 +86,37 @@ function packBE(bytes: Uint8Array): Uint32Array {
   return out;
 }
 
-export async function isWebGpuSupported(): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+import type { GpuStatus } from './types';
+
+/** Outcome of a WebGPU probe — kept narrow so the UI can show targeted advice. */
+export type WebGpuStatus = Exclude<GpuStatus, 'unprobed'>;
+
+export async function probeWebGpu(): Promise<WebGpuStatus> {
+  if (typeof navigator === 'undefined') return 'no-navigator';
+  if (!('gpu' in navigator)) return 'no-webgpu';
   try {
-    const adapter = await (navigator as any).gpu.requestAdapter({ powerPreference: 'high-performance' });
-    return !!adapter;
-  } catch {
-    return false;
+    // Permissive probe: no powerPreference. Requesting 'high-performance'
+    // can return null on machines with only integrated graphics.
+    const adapter = await (navigator as any).gpu.requestAdapter();
+    return adapter ? 'ok' : 'no-adapter';
+  } catch (e) {
+    console.warn('[posci] WebGPU probe threw:', e);
+    return 'error';
   }
+}
+
+export async function isWebGpuSupported(): Promise<boolean> {
+  return (await probeWebGpu()) === 'ok';
 }
 
 export async function createGpuMiner(): Promise<GpuMiner | null> {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return null;
   const gpu = (navigator as any).gpu as GPU;
-  // Prefer the discrete GPU on Macs/laptops with hybrid graphics.
-  const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+  // Prefer the discrete GPU on hybrid-graphics laptops, but fall back to
+  // the default adapter if 'high-performance' returns null (e.g. integrated
+  // graphics only).
+  let adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
+  if (!adapter) adapter = await gpu.requestAdapter();
   if (!adapter) return null;
 
   const device = await adapter.requestDevice();

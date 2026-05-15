@@ -1,11 +1,11 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useAccount, useReadContracts, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import { Cpu, Zap, Play, Square, Activity, Hash, AlertTriangle, ShieldAlert, CheckCircle2, ChevronsUpDown, Circle, Clock, Check } from 'lucide-react';
+import { useAccount, useReadContracts, useWriteContract, useWaitForTransactionReceipt, useEstimateFeesPerGas } from 'wagmi';
+import { Cpu, Zap, Play, Square, Activity, Hash, AlertTriangle, ShieldAlert, CheckCircle2, ChevronsUpDown, Circle, Clock, Check, Fuel } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
-import type { Hex } from 'viem';
+import { formatEther, type Hex } from 'viem';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 
 import { MINING_ABI, MINING_ADDRESS } from '@/lib/contracts';
 import { MiningManager } from '@/lib/mining/manager';
+import type { GpuStatus } from '@/lib/mining/types';
 import { formatHashrate, shortAddr } from '@/lib/utils';
+
+// Empirical: repeat miner ~110k gas, new miner first mine ~180k (extra cold
+// SSTORE for solutionsByMiner / _hasMined / miners.push), retarget tx +60k.
+// 240k covers ~99% of cases; capping prevents wallets from over-padding the
+// gas limit on top of their own inflated estimateGas.
+const MINE_GAS_LIMIT = 240_000n;
 
 export function MiningControls() {
   const { address, isConnected } = useAccount();
@@ -31,7 +38,9 @@ export function MiningControls() {
   const [cpuHashrate, setCpuHashrate] = useState(0);
   const [gpuHashrate, setGpuHashrate] = useState(0);
   const [gpuAvailable, setGpuAvailable] = useState(false);
+  const [gpuStatus, setGpuStatus] = useState<GpuStatus>('unprobed');
   const [gpuError, setGpuError] = useState<string | null>(null);
+  const { data: feeData } = useEstimateFeesPerGas({ query: { refetchInterval: 12_000 } });
   const [solutions, setSolutions] = useState<{ nonce: bigint; digest: Hex; source: 'cpu' | 'gpu'; submitted?: boolean }[]>([]);
   const submitting = useRef(false);
 
@@ -55,11 +64,15 @@ export function MiningControls() {
   const { isLoading: txConfirming, isSuccess: txSuccess } = useWaitForTransactionReceipt({ hash: txHash });
 
   useEffect(() => {
-    manager.probeGpu().then(setGpuAvailable);
+    manager.probeGpu().then((ok) => {
+      setGpuAvailable(ok);
+      setGpuStatus(manager.getGpuStatus());
+    });
     manager.on('state', (s) => {
       setCpuHashrate(s.cpuStats.hashrate);
       setGpuHashrate(s.gpuStats.hashrate);
       setGpuAvailable(s.gpuAvailable);
+      setGpuStatus(s.gpuStatus);
     });
     manager.on('hit', async (h) => {
       setSolutions((prev) => [{ ...h }, ...prev].slice(0, 8));
@@ -72,6 +85,10 @@ export function MiningControls() {
           abi: MINING_ABI,
           functionName: 'mine',
           args: [h.nonce, h.digest],
+          // Explicit cap so wallets don't pad on top of their own inflated
+          // estimateGas. Actual usage is ~110–180k; 240k is the headroom
+          // we need for first-mine + retarget edge cases.
+          gas: MINE_GAS_LIMIT,
         });
         toast.success('Solution submitted', { description: `${h.source.toUpperCase()} hit at nonce ${h.nonce.toString()}` });
         manager.stop(); setRunning(false);
@@ -122,6 +139,14 @@ export function MiningControls() {
   }
 
   const totalRate = cpuHashrate + gpuHashrate;
+
+  // Estimated ETH cost of a single mine() tx at current fees. ~150k gas is
+  // the typical actual usage (240k is the limit we set to cap wallet padding;
+  // base fee is only billed on gas used, not limit). Shows the user upfront
+  // what each successful solution will burn.
+  const gasFeeWei = feeData?.maxFeePerGas;
+  const estCostEth = gasFeeWei ? formatEther(gasFeeWei * 150_000n) : null;
+  const baseFeeGwei = gasFeeWei ? Number(gasFeeWei / 1_000_000_000n) : null;
 
   return (
     <Card className="overflow-hidden">
@@ -212,12 +237,12 @@ export function MiningControls() {
             <CpuControl workers={cpuWorkers} setWorkers={setCpuWorkers} hashrate={cpuHashrate} active={useCpu && running} />
           </TabsContent>
           <TabsContent value="gpu" className="space-y-4">
-            <GpuControl power={gpuPower} setPower={setGpuPower} hashrate={gpuHashrate} available={gpuAvailable} active={useGpu && running} />
+            <GpuControl power={gpuPower} setPower={setGpuPower} hashrate={gpuHashrate} available={gpuAvailable} status={gpuStatus} active={useGpu && running} />
           </TabsContent>
           <TabsContent value="hybrid" className="space-y-4">
             <CpuControl workers={cpuWorkers} setWorkers={setCpuWorkers} hashrate={cpuHashrate} active={useCpu && running} />
             <Separator />
-            <GpuControl power={gpuPower} setPower={setGpuPower} hashrate={gpuHashrate} available={gpuAvailable} active={useGpu && running} />
+            <GpuControl power={gpuPower} setPower={setGpuPower} hashrate={gpuHashrate} available={gpuAvailable} status={gpuStatus} active={useGpu && running} />
           </TabsContent>
         </Tabs>
 
@@ -243,6 +268,20 @@ export function MiningControls() {
             )}
           </div>
         </div>
+
+        {/* Gas preview — what each successful solution costs to submit */}
+        {isConnected && estCostEth && baseFeeGwei != null && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-secondary/20 px-4 py-2.5 text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Fuel className="h-3.5 w-3.5" />
+              <span>Per-solution gas (mainnet)</span>
+            </div>
+            <div className="flex items-center gap-3 font-mono tabular">
+              <span className="text-muted-foreground">{baseFeeGwei} gwei</span>
+              <span className="text-foreground">≈ {Number(estCostEth).toFixed(5)} ETH</span>
+            </div>
+          </div>
+        )}
 
         {/* Solutions */}
         <AnimatePresence>
@@ -314,7 +353,7 @@ function CpuControl({ workers, setWorkers, hashrate, active }: { workers: number
   );
 }
 
-function GpuControl({ power, setPower, hashrate, available, active }: { power: number; setPower: (n: number) => void; hashrate: number; available: boolean; active: boolean }) {
+function GpuControl({ power, setPower, hashrate, available, status, active }: { power: number; setPower: (n: number) => void; hashrate: number; available: boolean; status: GpuStatus; active: boolean }) {
   return (
     <div className={`space-y-3 rounded-lg border p-4 ${available ? 'border-border/50 bg-secondary/40' : 'border-amber-500/30 bg-amber-500/5'}`}>
       <div className="flex items-center justify-between">
@@ -338,7 +377,18 @@ function GpuControl({ power, setPower, hashrate, available, active }: { power: n
       </div>
       {!available && (
         <p className="text-xs text-amber-300/80">
-          WebGPU not available in this browser. Use Chrome 113+ / Edge 113+ on any OS, or Safari 18+ on macOS 15 (Sequoia) / iOS 18. On Safari 17 you can enable it manually via Develop → Feature Flags → WebGPU.
+          {status === 'no-webgpu' && (
+            <>This browser has no WebGPU. Use desktop Chrome 113+ / Edge 113+, or Safari 18+ on macOS 15 (Sequoia) / iOS 18. Mobile Chrome supports it on Android 14+ (Chrome 121+).</>
+          )}
+          {status === 'no-adapter' && (
+            <>WebGPU is present but no compatible GPU adapter is available — usually missing or outdated graphics drivers, or WebGPU disabled in <code className="font-mono text-[11px]">chrome://flags</code>. CPU mining still works.</>
+          )}
+          {status === 'error' && (
+            <>WebGPU initialisation failed. Check the browser console; CPU mining still works.</>
+          )}
+          {(status === 'unprobed' || status === 'no-navigator') && (
+            <>Probing WebGPU… if this persists, your browser does not expose <code className="font-mono text-[11px]">navigator.gpu</code>. Try desktop Chrome 113+ / Safari 18+.</>
+          )}
         </p>
       )}
     </div>

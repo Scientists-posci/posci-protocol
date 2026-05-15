@@ -22,6 +22,8 @@ export interface EngineStats {
   active:   boolean;
 }
 
+export type GpuStatus = 'ok' | 'no-navigator' | 'no-webgpu' | 'no-adapter' | 'error' | 'unprobed';
+
 export interface ManagerState {
   job:       MiningJob | null;
   hit:       MiningHit | null;
@@ -30,4 +32,5 @@ export interface ManagerState {
   cpuWorkers: number;
   gpuPower:   number;       // 1..1024 workgroups per dispatch
   gpuAvailable: boolean;
+  gpuStatus:  GpuStatus;
 }
