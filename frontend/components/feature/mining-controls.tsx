@@ -338,7 +338,7 @@ function GpuControl({ power, setPower, hashrate, available, active }: { power: n
       </div>
       {!available && (
         <p className="text-xs text-amber-300/80">
-          WebGPU not available in this browser. Try Chrome 113+, Edge 113+, or Safari 17+ on macOS/iOS.
+          WebGPU not available in this browser. Use Chrome 113+ / Edge 113+ on any OS, or Safari 18+ on macOS 15 (Sequoia) / iOS 18. On Safari 17 you can enable it manually via Develop → Feature Flags → WebGPU.
         </p>
       )}
     </div>

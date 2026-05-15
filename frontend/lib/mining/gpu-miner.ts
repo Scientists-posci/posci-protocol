@@ -89,7 +89,7 @@ function packBE(bytes: Uint8Array): Uint32Array {
 export async function isWebGpuSupported(): Promise<boolean> {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
   try {
-    const adapter = await (navigator as any).gpu.requestAdapter();
+    const adapter = await (navigator as any).gpu.requestAdapter({ powerPreference: 'high-performance' });
     return !!adapter;
   } catch {
     return false;
@@ -99,7 +99,8 @@ export async function isWebGpuSupported(): Promise<boolean> {
 export async function createGpuMiner(): Promise<GpuMiner | null> {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return null;
   const gpu = (navigator as any).gpu as GPU;
-  const adapter = await gpu.requestAdapter();
+  // Prefer the discrete GPU on Macs/laptops with hybrid graphics.
+  const adapter = await gpu.requestAdapter({ powerPreference: 'high-performance' });
   if (!adapter) return null;
 
   const device = await adapter.requestDevice();
