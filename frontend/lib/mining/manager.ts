@@ -37,6 +37,7 @@ export class MiningManager {
   private gpuPower = 64;
   private gpuAvailable = false;
   private gpuStatus: GpuStatus = 'unprobed';
+  private gpuError: string | null = null;
   private statsTimer: ReturnType<typeof setInterval> | null = null;
 
   on<K extends keyof ManagerEvents>(event: K, fn: ManagerEvents[K]) {
@@ -75,7 +76,17 @@ export class MiningManager {
     return this.gpuStatus;
   }
 
-  async start(challenge: Hex, miner: Address, target: bigint, useCpu: boolean, useGpu: boolean) {
+  getGpuError(): string | null {
+    return this.gpuError;
+  }
+
+  /**
+   * Start mining. Returns a small report so the caller knows whether GPU
+   * actually came up, and whether an automatic CPU fallback was used.
+   */
+  async start(challenge: Hex, miner: Address, target: bigint, useCpu: boolean, useGpu: boolean):
+    Promise<{ cpuStarted: boolean; gpuStarted: boolean; gpuFellBackToCpu: boolean }>
+  {
     this.stop();
     const startNonce = BigInt(Math.floor(Math.random() * 0xffffffff));
     this.job = { challenge, miner, target, startNonce };
@@ -89,11 +100,28 @@ export class MiningManager {
     this.cpuStats = { source: 'cpu', hashrate: 0, attempts: 0n, active: false };
     this.gpuStats = { source: 'gpu', hashrate: 0, attempts: 0n, active: false };
 
-    if (useCpu) this.startCpu();
-    if (useGpu) await this.startGpu();
+    let gpuStarted = false;
+    let gpuFellBackToCpu = false;
+    if (useGpu) {
+      gpuStarted = await this.startGpu();
+      // If the user asked for GPU-only mining but GPU init failed, spin up
+      // CPU workers automatically instead of leaving Total at 0 H/s with no
+      // indication that anything is wrong. Without this fallback the UI
+      // sits there showing "Stop" but mining nothing.
+      if (!gpuStarted && !useCpu && this.cpuWorkerCount > 0) {
+        useCpu = true;
+        gpuFellBackToCpu = true;
+      }
+    }
+    let cpuStarted = false;
+    if (useCpu) {
+      this.startCpu();
+      cpuStarted = this.cpuStats.active;
+    }
 
     this.statsTimer = setInterval(() => this.tickStats(), STATS_TICK_MS);
     this.emitState();
+    return { cpuStarted, gpuStarted, gpuFellBackToCpu };
   }
 
   stop() {
@@ -156,24 +184,40 @@ export class MiningManager {
 
   // ---------------- GPU ----------------
 
-  private async startGpu() {
-    if (!this.job) return;
+  /**
+   * Attempt to start the GPU engine. Returns true on success, false if the
+   * device/shader could not be initialised (e.g. WGSL self-test mismatch on
+   * an integrated GPU). The caller is responsible for falling back to CPU
+   * mining when this returns false.
+   */
+  private async startGpu(): Promise<boolean> {
+    if (!this.job) return false;
     if (!this.gpu) {
-      if (!this.gpuPromise) this.gpuPromise = createGpuMiner();
+      // Recreate the promise on every startup. The previous design cached a
+      // single rejected promise forever, so a transient failure (driver
+      // hiccup, first-time-after-tab-suspend) became permanent for the
+      // session. We want every Start click to get a fresh attempt.
+      this.gpuPromise = createGpuMiner();
       try {
         this.gpu = await this.gpuPromise;
-      } catch (e) {
-        console.warn('GPU init failed:', e);
+      } catch (e: any) {
+        const msg = e?.message ?? String(e);
+        console.warn('[posci] GPU init failed:', msg);
+        this.gpuError = msg;
+        this.gpuStatus = 'init-failed';
         this.gpuAvailable = false;
         this.emitState();
-        return;
+        return false;
       }
       if (!this.gpu) {
+        this.gpuError = 'requestAdapter / requestDevice returned null';
+        this.gpuStatus = 'init-failed';
         this.gpuAvailable = false;
         this.emitState();
-        return;
+        return false;
       }
       this.gpuAvailable = true;
+      this.gpuError = null;
     }
     const reservedStride = BigInt(this.cpuWorkerCount + 1); // GPU walks at +cpuWorkerCount * GPU dispatch size
     const gpuStartNonce = this.job.startNonce + BigInt(this.cpuWorkerCount); // disjoint from CPU lanes
@@ -194,10 +238,11 @@ export class MiningManager {
         this.gpuAttempts += BigInt(delta);
       },
     }).catch((e) => {
-      console.warn('GPU mining error:', e);
+      console.warn('[posci] GPU mining loop error:', e);
       this.gpuStats.active = false;
       this.emitState();
     });
+    return true;
   }
 
   private stopGpu() {

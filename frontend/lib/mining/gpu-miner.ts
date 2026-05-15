@@ -88,8 +88,10 @@ function packBE(bytes: Uint8Array): Uint32Array {
 
 import type { GpuStatus } from './types';
 
-/** Outcome of a WebGPU probe — kept narrow so the UI can show targeted advice. */
-export type WebGpuStatus = Exclude<GpuStatus, 'unprobed'>;
+/** Outcome of a WebGPU probe — kept narrow so the UI can show targeted advice.
+ *  Excludes lifecycle states that the probe itself can't produce
+ *  ('unprobed' = before probe, 'init-failed' = after a failed startGpu). */
+export type WebGpuStatus = Exclude<GpuStatus, 'unprobed' | 'init-failed'>;
 
 export async function probeWebGpu(): Promise<WebGpuStatus> {
   if (typeof navigator === 'undefined') return 'no-navigator';

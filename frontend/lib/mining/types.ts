@@ -22,7 +22,19 @@ export interface EngineStats {
   active:   boolean;
 }
 
-export type GpuStatus = 'ok' | 'no-navigator' | 'no-webgpu' | 'no-adapter' | 'error' | 'unprobed';
+/**
+ * GPU lifecycle states for the UI.
+ * - unprobed:    haven't called probeWebGpu yet (initial state)
+ * - no-navigator: SSR / non-browser context
+ * - no-webgpu:   navigator.gpu missing — old browser, mobile, or feature disabled
+ * - no-adapter:  navigator.gpu present, but requestAdapter returned null
+ * - error:       requestAdapter threw
+ * - ok:          adapter obtained successfully
+ * - init-failed: probe was OK but createGpuMiner failed (e.g. WGSL self-test
+ *                mismatch on integrated graphics). This is set AFTER a Start
+ *                attempt, not on initial probe.
+ */
+export type GpuStatus = 'ok' | 'no-navigator' | 'no-webgpu' | 'no-adapter' | 'error' | 'unprobed' | 'init-failed';
 
 export interface ManagerState {
   job:       MiningJob | null;

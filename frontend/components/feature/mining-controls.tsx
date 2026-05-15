@@ -120,16 +120,22 @@ export function MiningControls() {
     setSolutions([]);
     setGpuError(null);
     try {
-      await manager.start(challenge, address, target, useCpu, useGpu && gpuAvailable);
-      setRunning(true);
-    } catch (e: any) {
-      setGpuError(e?.message ?? 'GPU failed');
-      toast.error('GPU init failed', { description: e?.message ?? 'Falling back to CPU' });
-      // Try CPU only
-      if (useCpu) {
-        await manager.start(challenge, address, target, true, false);
-        setRunning(true);
+      const r = await manager.start(challenge, address, target, useCpu, useGpu && gpuAvailable);
+      setRunning(r.cpuStarted || r.gpuStarted);
+      if (r.gpuFellBackToCpu) {
+        const reason = manager.getGpuError() ?? 'GPU initialisation failed';
+        setGpuError(reason);
+        toast.warning('GPU unavailable — using CPU instead', {
+          description: reason,
+        });
+      } else if (useGpu && gpuAvailable && !r.gpuStarted) {
+        const reason = manager.getGpuError() ?? 'GPU initialisation failed';
+        setGpuError(reason);
+        toast.error('GPU disabled', { description: reason });
       }
+    } catch (e: any) {
+      setGpuError(e?.message ?? 'Mining failed to start');
+      toast.error('Failed to start', { description: e?.message ?? 'unknown error' });
     }
   }
 
@@ -237,12 +243,12 @@ export function MiningControls() {
             <CpuControl workers={cpuWorkers} setWorkers={setCpuWorkers} hashrate={cpuHashrate} active={useCpu && running} />
           </TabsContent>
           <TabsContent value="gpu" className="space-y-4">
-            <GpuControl power={gpuPower} setPower={setGpuPower} hashrate={gpuHashrate} available={gpuAvailable} status={gpuStatus} active={useGpu && running} />
+            <GpuControl power={gpuPower} setPower={setGpuPower} hashrate={gpuHashrate} available={gpuAvailable} status={gpuStatus} initError={gpuError} active={useGpu && running} />
           </TabsContent>
           <TabsContent value="hybrid" className="space-y-4">
             <CpuControl workers={cpuWorkers} setWorkers={setCpuWorkers} hashrate={cpuHashrate} active={useCpu && running} />
             <Separator />
-            <GpuControl power={gpuPower} setPower={setGpuPower} hashrate={gpuHashrate} available={gpuAvailable} status={gpuStatus} active={useGpu && running} />
+            <GpuControl power={gpuPower} setPower={setGpuPower} hashrate={gpuHashrate} available={gpuAvailable} status={gpuStatus} initError={gpuError} active={useGpu && running} />
           </TabsContent>
         </Tabs>
 
@@ -353,7 +359,7 @@ function CpuControl({ workers, setWorkers, hashrate, active }: { workers: number
   );
 }
 
-function GpuControl({ power, setPower, hashrate, available, status, active }: { power: number; setPower: (n: number) => void; hashrate: number; available: boolean; status: GpuStatus; active: boolean }) {
+function GpuControl({ power, setPower, hashrate, available, status, initError, active }: { power: number; setPower: (n: number) => void; hashrate: number; available: boolean; status: GpuStatus; initError: string | null; active: boolean }) {
   return (
     <div className={`space-y-3 rounded-lg border p-4 ${available ? 'border-border/50 bg-secondary/40' : 'border-amber-500/30 bg-amber-500/5'}`}>
       <div className="flex items-center justify-between">
@@ -385,6 +391,16 @@ function GpuControl({ power, setPower, hashrate, available, status, active }: { 
           )}
           {status === 'error' && (
             <>WebGPU initialisation failed. Check the browser console; CPU mining still works.</>
+          )}
+          {status === 'init-failed' && (
+            <>
+              GPU shader self-test failed on this device — typically integrated
+              graphics where the WGSL kernel mis-compiles. CPU mining was
+              started automatically.
+              {initError && (
+                <span className="block mt-1 font-mono text-[11px] text-amber-400/70">{initError}</span>
+              )}
+            </>
           )}
           {(status === 'unprobed' || status === 'no-navigator') && (
             <>Probing WebGPU… if this persists, your browser does not expose <code className="font-mono text-[11px]">navigator.gpu</code>. Try desktop Chrome 113+ / Safari 18+.</>

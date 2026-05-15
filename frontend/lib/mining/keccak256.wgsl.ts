@@ -136,23 +136,38 @@ fn keccakF(state: ptr<function, array<vec2<u32>, 25>>) {
   }
 }
 
-// Read a 32-bit limb from a flat indexable array<vec4<u32>, 2>.
-fn limb8(arr: array<vec4<u32>, 2>, i: u32) -> u32 {
-  if (i < 4u) {
-    if (i == 0u) { return arr[0].x; }
-    if (i == 1u) { return arr[0].y; }
-    if (i == 2u) { return arr[0].z; }
-    return arr[0].w;
+// Index one of 8 u32 limbs out of a pair of vec4<u32>. Taking the two
+// vec4s by value (rather than the whole array) avoids triggering the
+// array-by-value-from-uniform pattern that mis-compiles on several
+// real-world WebGPU backends (Apple Metal, Intel UHD on D3D12, some
+// Mesa Vulkan paths) — which is exactly what causes the GPU self-test
+// to fail on integrated graphics.
+fn limb8FromPair(v0: vec4<u32>, v1: vec4<u32>, i: u32) -> u32 {
+  switch (i) {
+    case 0u: { return v0.x; }
+    case 1u: { return v0.y; }
+    case 2u: { return v0.z; }
+    case 3u: { return v0.w; }
+    case 4u: { return v1.x; }
+    case 5u: { return v1.y; }
+    case 6u: { return v1.z; }
+    default: { return v1.w; }
   }
-  if (i == 4u) { return arr[1].x; }
-  if (i == 5u) { return arr[1].y; }
-  if (i == 6u) { return arr[1].z; }
-  return arr[1].w;
 }
 
 @compute @workgroup_size(64)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
   let perThread = params.perThread;
+
+  // Materialize uniform-memory arrays into function-local vec4 values once.
+  // Then index by .x/.y/.z/.w directly — no helper that takes the whole
+  // array by value (that pattern is the integrated-GPU compile hazard).
+  let ch0 = params.challenge[0];
+  let ch1 = params.challenge[1];
+  let mn0 = params.miner[0];
+  let mn1 = params.miner[1];
+  let tg0 = params.target[0];
+  let tg1 = params.target[1];
 
   // base + threadId * perThread, treated as u64
   let threadOffset = gid.x * perThread;
@@ -172,15 +187,15 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     // challenge: 8 LE u32 limbs → lanes 0..3 (each lane = vec2 of 2 LE u32)
-    st[0] = vec2<u32>(limb8(params.challenge, 0u), limb8(params.challenge, 1u));
-    st[1] = vec2<u32>(limb8(params.challenge, 2u), limb8(params.challenge, 3u));
-    st[2] = vec2<u32>(limb8(params.challenge, 4u), limb8(params.challenge, 5u));
-    st[3] = vec2<u32>(limb8(params.challenge, 6u), limb8(params.challenge, 7u));
+    st[0] = vec2<u32>(ch0.x, ch0.y);
+    st[1] = vec2<u32>(ch0.z, ch0.w);
+    st[2] = vec2<u32>(ch1.x, ch1.y);
+    st[3] = vec2<u32>(ch1.z, ch1.w);
 
     // miner: 5 LE u32 limbs → lanes 4, 5, low(6) (limb 4 → lane6.x)
-    st[4] = vec2<u32>(limb8(params.miner, 0u), limb8(params.miner, 1u));
-    st[5] = vec2<u32>(limb8(params.miner, 2u), limb8(params.miner, 3u));
-    st[6] = vec2<u32>(limb8(params.miner, 4u), 0u);
+    st[4] = vec2<u32>(mn0.x, mn0.y);
+    st[5] = vec2<u32>(mn0.z, mn0.w);
+    st[6] = vec2<u32>(mn1.x, 0u);
 
     // nonce: bytes 52..83 of input (32 bytes BE), but only low 8 bytes nonzero.
     // Lanes 7, 8 = 0; lane 9 high = bswap(nonceHi); lane 10 low = bswap(nonceLo).
@@ -209,7 +224,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     var decided = false;
     for (var k: u32 = 0u; k < 8u; k = k + 1u) {
       if (decided) { continue; }
-      let tk = limb8(params.target, k);
+      let tk = limb8FromPair(tg0, tg1, k);
       if (d[k] < tk) { leq = true;  decided = true; }
       if (d[k] > tk) { leq = false; decided = true; }
     }
